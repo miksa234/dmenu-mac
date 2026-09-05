@@ -1,0 +1,115 @@
+.TH DMENU-MAC 1 "September 2026" "dmenu-mac 0.1.0"
+.SH NAME
+dmenu-mac \- dynamic menu for macOS
+.SH SYNOPSIS
+.B dmenu-mac
+.RB [ options ]
+.br
+.B dmenu-mac_run
+.RB [ options ]
+.br
+.B dmenu-mac_path
+.SH DESCRIPTION
+.B dmenu-mac
+reads newline-separated items from standard input, displays a native AppKit
+menu, and writes the selected item to standard output. It exits successfully
+after a selection and unsuccessfully when cancelled.
+.PP
+The menu floats in the center of the selected screen by default. Its width is
+the greater of its natural content width and the configured minimum width,
+clamped to the visible screen.
+.PP
+.B dmenu-mac_path
+prints a sorted, deduplicated list of executables found in PATH. It caches the
+list in ~/.cache/dmenu/dmenu_mac_cache and rebuilds it when PATH changes or a
+PATH directory has been modified.
+.PP
+.B dmenu-mac_run
+uses that list to select and directly execute a command.
+.SH OPTIONS
+.TP
+.B \-b, \-\-bottom
+Display a full-width bar at the bottom of the screen.
+.TP
+.B \-t, \-\-top
+Display a full-width bar at the top of the screen.
+.TP
+.B \-i, \-\-insensitive
+Match case insensitively.
+.TP
+.BI \-l " lines"
+Display at most this many result rows. Zero uses a horizontal result row.
+.TP
+.BI \-mw " width"
+Set the minimum centered width in points. The default is 600.
+.TP
+.BI \-h " height"
+Set the minimum row height in points. The default is 20.
+.TP
+.BI \-m " screen"
+Use the screen at the given zero-based index.
+.TP
+.BI \-p " prompt"
+Display a prompt to the left of the input field.
+.TP
+.BI \-po " prompt"
+Display a prompt without reading standard input.
+.TP
+.B \-r, \-\-return-early
+Return as soon as filtering leaves one match.
+.TP
+.BI \-fn " font"
+Set the font name, optionally followed by a point size.
+.TP
+.BI \-bw " width"
+Set the border width.
+.TP
+.BI \-bc " color"
+Set the border color.
+.TP
+.BI \-nb " color"
+Set the normal background color.
+.TP
+.BI \-nf " color"
+Set the normal foreground color.
+.TP
+.BI \-sb " color"
+Set the selected background color.
+.TP
+.BI \-sf " color"
+Set the selected foreground color. Colors use #RRGGBB or #RRGGBBAA.
+.TP
+.B \-e, \-ec, \-er
+Display standard input as a noninteractive left-, center-, or right-aligned
+message.
+.TP
+.BI \-et " seconds"
+Set the message timeout. The default is 3 seconds.
+.TP
+.B \-v, \-\-version
+Print version information and exit.
+.SH KEYS
+.TP
+.B Control-j, Down
+Select the next matching item.
+.TP
+.B Control-k, Up
+Select the previous matching item.
+.TP
+.B PageUp, PageDown
+Move by one visible page.
+.TP
+.B Tab
+Copy the selected item into the input field.
+.TP
+.B Return
+Print the selected item and exit.
+.TP
+.B Shift-Return
+Print the input text and exit.
+.TP
+.B Control-Return
+Print the selected item without closing the menu.
+.TP
+.B Escape, Control-c, Control-g
+Cancel and exit unsuccessfully.
