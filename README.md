@@ -1,6 +1,6 @@
-# dmenu-mac - dynamic menu
+# dmenu-mac
 
-dmenu-mac is a small native dynamic menu for macOS.
+dmenu-mac is a dmenu for macOS.
 
 ## Requirements
 

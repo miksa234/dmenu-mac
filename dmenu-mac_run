@@ -1,4 +1,16 @@
 #!/bin/sh
 
-choice=$(dmenu-mac_path | dmenu-mac -l 15 -i "$@") || exit
-exec "$choice"
+choice=$(dmenu-mac_path | dmenu-mac -i "$@")
+status=$?
+
+[ "$status" -eq 0 ] || exit "$status"
+[ -n "$choice" ] || exit 1
+
+case "$choice" in
+*.app)
+  exec open "$choice"
+  ;;
+*)
+  exec "$choice"
+  ;;
+esac

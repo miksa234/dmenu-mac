@@ -1,14 +1,17 @@
 /* See LICENSE for copyright and license details. */
 #include <dirent.h>
 #include <errno.h>
+#include <fts.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
 #define CACHE ".cache/dmenu_mac_cache"
+#define CACHE_TTL 30
 
 static char **items;
 static const char *home, *path;
@@ -33,6 +36,8 @@ static int uptodate(void) {
   char *copy, *directory;
   struct stat status;
   if (stat(CACHE, &status) < 0)
+    return 0;
+  if (time(NULL) - status.st_mtime >= CACHE_TTL)
     return 0;
   time_t modified = status.st_mtime;
   FILE *cache = fopen(CACHE, "r");
@@ -61,6 +66,65 @@ static int uptodate(void) {
   }
   free(copy);
   return 1;
+}
+
+static void add_item(const char *item, size_t *count) {
+  char **grown = realloc(items, (*count + 1) * sizeof *items);
+  if (!grown)
+    die("realloc failed");
+  items = grown;
+  if (!(items[(*count)++] = strdup(item)))
+    die("strdup failed");
+}
+
+static int is_app(const char *path) {
+  size_t length = strlen(path);
+  return length > 4 && !strcmp(path + length - 4, ".app");
+}
+
+static void scan_app_roots(size_t *count) {
+  char user_apps[PATH_MAX];
+  const char *roots[] = {
+      "/Applications",
+      "/System/Applications",
+      "/System/Library/CoreServices",
+      "/Network/Applications",
+      user_apps,
+      NULL,
+  };
+  if (snprintf(user_apps, sizeof user_apps, "%s/Applications", home) >=
+      (int)sizeof user_apps)
+    return;
+
+  FTS *tree = fts_open((char *const *)roots, FTS_PHYSICAL | FTS_NOCHDIR, NULL);
+  if (!tree)
+    return;
+  FTSENT *entry;
+  while ((entry = fts_read(tree))) {
+    if (entry->fts_info != FTS_D)
+      continue;
+    if (!is_app(entry->fts_path))
+      continue;
+    add_item(entry->fts_path, count);
+    fts_set(tree, entry, FTS_SKIP);
+  }
+  fts_close(tree);
+}
+
+static void scan_spotlight(size_t *count) {
+  FILE *results = popen(
+      "/usr/bin/mdfind 'kMDItemContentType == \"com.apple.application-bundle\"'",
+      "r");
+  if (!results)
+    return;
+  char buffer[PATH_MAX];
+  while (fgets(buffer, sizeof buffer, results)) {
+    buffer[strcspn(buffer, "\n")] = '\0';
+    struct stat status;
+    if (is_app(buffer) && !stat(buffer, &status) && S_ISDIR(status.st_mode))
+      add_item(buffer, count);
+  }
+  pclose(results);
 }
 
 static void print_cache(void) {
@@ -96,20 +160,17 @@ static void scan(void) {
       struct stat status;
       if (entry->d_name[0] == '.')
         continue;
-      if (snprintf(buffer, sizeof buffer, "%s/%s", directory, entry->d_name) >=
-              (int)sizeof buffer ||
-          stat(buffer, &status) < 0 || !S_ISREG(status.st_mode) ||
-          access(buffer, X_OK) < 0)
-        continue;
-      char **grown = realloc(items, (count + 1) * sizeof *items);
-      if (!grown)
-        die("realloc failed");
-      items = grown;
-      if (!(items[count++] = strdup(entry->d_name)))
-        die("strdup failed");
+       if (snprintf(buffer, sizeof buffer, "%s/%s", directory, entry->d_name) >=
+               (int)sizeof buffer ||
+           stat(buffer, &status) < 0 || !S_ISREG(status.st_mode) ||
+           access(buffer, X_OK) < 0)
+         continue;
+       add_item(entry->d_name, &count);
     }
     closedir(dir);
   }
+  scan_app_roots(&count);
+  scan_spotlight(&count);
   free(copy);
   qsort(items, count, sizeof *items, qstrcmp);
   FILE *cache = fopen(CACHE, "w");

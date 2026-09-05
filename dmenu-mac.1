@@ -20,9 +20,10 @@ the greater of its natural content width and the configured minimum width,
 clamped to the visible screen.
 .PP
 .B dmenu-mac_path
-prints a sorted, deduplicated list of executables found in PATH. It caches the
-list in ~/.cache/dmenu/dmenu_mac_cache and rebuilds it when PATH changes or a
-PATH directory has been modified.
+prints a sorted, deduplicated list of executables found in PATH and macOS
+application bundles. Applications are emitted as full .app bundle paths and
+are discovered through Spotlight plus standard application directories. It
+caches the list in ~/.cache/dmenu_mac_cache and refreshes it periodically.
 .PP
 .B dmenu-mac_run
 uses that list to select and directly execute a command.
