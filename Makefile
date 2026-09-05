@@ -1,7 +1,7 @@
 PREFIX ?= /usr/local
-CC ?= clang
+CC = clang
 CFLAGS ?= -O2
-CFLAGS += -Wall -Wextra -Wpedantic
+CFLAGS += -Wall -Wextra
 
 all: dmenu-mac dmenu-mac_path
 

@@ -138,11 +138,11 @@ static Options parse_options(int argc, char **argv) {
       .border_width = 3,
       .monitor = 0,
       .timeout = 3,
-      .font = @"Menlo",
-      .normal_bg = color_option("#000000f2"),
+      .font = @"Terminus (TTF) 15",
+      .normal_bg = color_option("#000000ff"),
       .normal_fg = color_option("#ffffffff"),
       .selected_bg = color_option("#ffc87fff"),
-      .selected_fg = color_option("#000000f2"),
+      .selected_fg = color_option("#000000ff"),
       .border = color_option("#ffc87fff"),
       .message_alignment = NSTextAlignmentLeft,
   };
@@ -366,13 +366,17 @@ static NSFont *menu_font(NSString *description) {
                                        defer:NO];
   self.panel.level = NSStatusWindowLevel;
   self.panel.opaque = o.normal_bg.alphaComponent == 1;
-  self.panel.backgroundColor = o.border;
+  self.panel.backgroundColor = NSColor.clearColor;
   self.panel.collectionBehavior = NSWindowCollectionBehaviorMoveToActiveSpace |
                                   NSWindowCollectionBehaviorFullScreenAuxiliary;
   self.panel.hidesOnDeactivate = YES;
   self.panel.releasedWhenClosed = NO;
 
   NSView *content = self.panel.contentView;
+  content.wantsLayer = YES;
+  content.layer.backgroundColor = o.normal_bg.CGColor;
+  content.layer.borderColor = o.border.CGColor;
+  content.layer.borderWidth = o.border_width;
   NSRect inner = NSInsetRect(content.bounds, o.border_width, o.border_width);
   if (o.message) {
     NSTextField *label =
@@ -389,7 +393,15 @@ static NSFont *menu_font(NSString *description) {
                afterDelay:o.timeout];
   } else {
     promptWidth = MIN(promptWidth, MAX(0, inner.size.width - 60));
-    CGFloat inputY = inner.size.height - o.height;
+    CGFloat inputY = inner.origin.y + inner.size.height - o.height;
+
+    self.results = [[ResultView alloc]
+        initWithFrame:NSMakeRect(inner.origin.x, inner.origin.y,
+                                 inner.size.width,
+                                 MAX(0, inner.size.height - o.height))];
+    self.results.menuController = self;
+    [content addSubview:self.results];
+
     if (o.prompt.length) {
       NSTextField *prompt = [NSTextField labelWithString:o.prompt];
       prompt.frame = NSMakeRect(inner.origin.x, inputY, promptWidth, o.height);
@@ -400,9 +412,15 @@ static NSFont *menu_font(NSString *description) {
       prompt.alignment = NSTextAlignmentCenter;
       [content addSubview:prompt];
     }
+    CGFloat inputPadding = 6;
+    CGFloat inputVerticalPadding = 3;
     self.input = [[NSTextField alloc]
-        initWithFrame:NSMakeRect(inner.origin.x + promptWidth, inputY,
-                                 inner.size.width - promptWidth, o.height)];
+        initWithFrame:NSMakeRect(inner.origin.x + promptWidth + inputPadding,
+                                 inputY + inputVerticalPadding,
+                                 MAX(0, inner.size.width - promptWidth -
+                                         2 * inputPadding),
+                                 MAX(0, o.height -
+                                         2 * inputVerticalPadding))];
     self.input.bordered = NO;
     self.input.focusRingType = NSFocusRingTypeNone;
     self.input.font = font;
@@ -410,19 +428,16 @@ static NSFont *menu_font(NSString *description) {
     self.input.backgroundColor = o.normal_bg;
     self.input.delegate = self;
     [content addSubview:self.input];
-
-    self.results = [[ResultView alloc]
-        initWithFrame:NSMakeRect(inner.origin.x, inner.origin.y,
-                                 inner.size.width,
-                                 MAX(0, inner.size.height - o.height))];
-    self.results.menuController = self;
-    [content addSubview:self.results];
   }
 
   [NSApp activateIgnoringOtherApps:YES];
   [self.panel makeKeyAndOrderFront:nil];
-  if (self.input)
+  if (self.input) {
     [self.panel makeFirstResponder:self.input];
+    NSTextView *editor =
+        (NSTextView *)[self.panel fieldEditor:YES forObject:self.input];
+    editor.insertionPointColor = o.normal_fg;
+  }
   if (o.return_early && self.matches.count == 1)
     [self acceptInput:NO keepOpen:NO];
 }
@@ -439,8 +454,7 @@ static NSFont *menu_font(NSString *description) {
   [NSApp stop:nil];
 }
 
-- (void)controlTextDidChange:(NSNotification *)notification {
-  (void)notification;
+- (void)refreshMatches {
   NSString *query = self.input.stringValue;
   NSArray<NSString *> *tokens =
       [query componentsSeparatedByCharactersInSet:[NSCharacterSet
@@ -486,6 +500,11 @@ static NSFont *menu_font(NSString *description) {
     [self acceptInput:NO keepOpen:NO];
 }
 
+- (void)controlTextDidChange:(NSNotification *)notification {
+  (void)notification;
+  [self refreshMatches];
+}
+
 - (void)selectRelative:(NSInteger)delta {
   if (!self.matches.count)
     return;
@@ -521,8 +540,12 @@ static NSFont *menu_font(NSString *description) {
       event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask;
   BOOL control = flags & NSEventModifierFlagControl;
   NSString *key = event.charactersIgnoringModifiers.lowercaseString;
-  if (control && ([key isEqualToString:@"j"] || [key isEqualToString:@"k"])) {
-    [self selectRelative:[key isEqualToString:@"j"] ? 1 : -1];
+  if (control && ([key isEqualToString:@"j"] || [key isEqualToString:@"k"] ||
+                  [key isEqualToString:@"n"] || [key isEqualToString:@"p"])) {
+    [self selectRelative:([key isEqualToString:@"j"] ||
+                           [key isEqualToString:@"n"])
+                              ? 1
+                              : -1];
     return YES;
   }
   if (control && ([key isEqualToString:@"c"] || [key isEqualToString:@"g"])) {
@@ -549,7 +572,7 @@ static NSFont *menu_font(NSString *description) {
   case 48:
     if (self.selection >= 0) {
       self.input.stringValue = self.matches[self.selection];
-      [self controlTextDidChange:nil];
+      [self refreshMatches];
     }
     return YES;
   case 53:

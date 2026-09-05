@@ -1,3 +1,4 @@
 #!/bin/sh
 
-dmenu-mac_path | dmenu-mac -l 15 -i "$@"
+choice=$(dmenu-mac_path | dmenu-mac -l 15 -i "$@") || exit
+exec "$choice"
