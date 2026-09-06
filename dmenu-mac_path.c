@@ -198,6 +198,10 @@ scan (void)
         unlink (temporary);
         die ("replace cache failed");
     }
+    for (size_t i = 0; i < count; i++)
+        free (items[i]);
+    free (items);
+    items = NULL;
 }
 
 int

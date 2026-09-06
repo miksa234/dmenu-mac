@@ -66,6 +66,8 @@ typedef struct {
 @property (nonatomic) Options options;
 @property (nonatomic, strong) NSArray<NSString *> *items;
 @property (nonatomic, strong) NSArray<NSString *> *matches;
+@property (nonatomic, strong) NSArray<NSNumber *> *matchWidths;
+@property (nonatomic, strong) NSFont *font;
 @property (nonatomic) NSInteger selection;
 @property (nonatomic) NSInteger firstVisible;
 @property (nonatomic) int status;
@@ -337,11 +339,11 @@ menu_font (NSString *description)
         return;
 
     NSDictionary *normal = @{
-        NSFontAttributeName : menu_font (options.font),
+        NSFontAttributeName : menu.font,
         NSForegroundColorAttributeName : options.normal_fg
     };
     NSDictionary *selected = @{
-        NSFontAttributeName : menu_font (options.font),
+        NSFontAttributeName : menu.font,
         NSForegroundColorAttributeName : options.selected_fg
     };
     CGFloat padding = 10;
@@ -363,8 +365,7 @@ menu_font (NSString *description)
         CGFloat x = 0;
         for (NSInteger i = menu.firstVisible; i < (NSInteger)menu.matches.count;
              i++) {
-            CGFloat width =
-                [menu.matches[i] sizeWithAttributes:normal].width + 2 * padding;
+            CGFloat width = menu.matchWidths[i].doubleValue;
             if (x + width > self.bounds.size.width && x > 0)
                 break;
             NSRect item = NSMakeRect (x, 0, width, options.height);
@@ -385,8 +386,15 @@ menu_font (NSString *description)
 {
     if ((self = [super init])) {
         _options = options;
+        _font = menu_font (options.font);
         _items = items;
         _matches = items;
+        NSMutableArray<NSNumber *> *widths =
+            [NSMutableArray arrayWithCapacity:items.count];
+        NSDictionary *attributes = @{ NSFontAttributeName : _font };
+        for (NSString *item in items)
+            [widths addObject:@([item sizeWithAttributes:attributes].width + 20)];
+        _matchWidths = widths;
         _selection = items.count ? 0 : -1;
         _status = EXIT_FAILURE;
     }
@@ -605,6 +613,11 @@ menu_font (NSString *description)
     [exact addObjectsFromArray:prefix];
     [exact addObjectsFromArray:substring];
     self.matches = exact;
+    NSMutableArray<NSNumber *> *widths = [NSMutableArray arrayWithCapacity:exact.count];
+    NSDictionary *attributes = @{ NSFontAttributeName : self.font };
+    for (NSString *item in exact)
+        [widths addObject:@([item sizeWithAttributes:attributes].width + 20)];
+    self.matchWidths = widths;
     self.selection = exact.count ? 0 : -1;
     self.firstVisible = 0;
     [self.results setNeedsDisplay:YES];
@@ -640,15 +653,11 @@ menu_font (NSString *description)
     if (!self.matches.count || !self.results.bounds.size.width)
         return;
 
-    NSDictionary *attributes =
-        @{ NSFontAttributeName : menu_font (self.options.font) };
-    CGFloat padding = 20;
     if (self.selection >= self.firstVisible) {
         while (self.firstVisible < self.selection) {
             CGFloat width = 0;
             for (NSInteger i = self.firstVisible; i <= self.selection; i++)
-                width += [self.matches[i] sizeWithAttributes:attributes].width
-                         + padding;
+                width += self.matchWidths[i].doubleValue;
             if (width <= self.results.bounds.size.width)
                 break;
             self.firstVisible++;
@@ -658,8 +667,7 @@ menu_font (NSString *description)
         while (self.firstVisible > 0) {
             CGFloat width = 0;
             for (NSInteger i = self.firstVisible - 1; i <= self.selection; i++)
-                width += [self.matches[i] sizeWithAttributes:attributes].width
-                         + padding;
+                width += self.matchWidths[i].doubleValue;
             if (width > self.results.bounds.size.width)
                 break;
             self.firstVisible--;
