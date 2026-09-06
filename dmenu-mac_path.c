@@ -16,6 +16,7 @@
 
 static char **items;
 static const char *home, *path;
+static char working_directory[PATH_MAX];
 
 static void
 die (const char *message)
@@ -37,10 +38,29 @@ qstrcmp (const void *a, const void *b)
     return strcmp (*(const char **)a, *(const char **)b);
 }
 
+static const char *
+next_path_directory (const char **cursor, char *buffer, size_t size)
+{
+    if (!*cursor)
+        return NULL;
+    const char *start = *cursor;
+    const char *end = strchr (start, ':');
+    size_t length = end ? (size_t)(end - start) : strlen (start);
+    *cursor = end ? end + 1 : NULL;
+    if (!length)
+        return working_directory;
+    if (length >= size)
+        die ("PATH component too long");
+    memcpy (buffer, start, length);
+    buffer[length] = '\0';
+    return buffer;
+}
+
 static int
 uptodate (void)
 {
-    char *copy, *directory;
+    char directory_buffer[PATH_MAX];
+    const char *cursor = path, *directory;
     struct stat status;
     if (stat (CACHE, &status) < 0)
         return 0;
@@ -62,16 +82,11 @@ uptodate (void)
     free (cached_path);
     if (!same_path)
         return 0;
-    if (!(copy = strdup (path)))
-        die ("strdup failed");
-    for (directory = strtok (copy, ":"); directory;
-         directory = strtok (NULL, ":")) {
-        if (!stat (directory, &status) && status.st_mtime > modified) {
-            free (copy);
+    while ((directory = next_path_directory (
+                &cursor, directory_buffer, sizeof directory_buffer))) {
+        if (!stat (directory, &status) && status.st_mtime > modified)
             return 0;
-        }
     }
-    free (copy);
     return 1;
 }
 
@@ -148,12 +163,11 @@ static void
 scan (void)
 {
     char buffer[PATH_MAX];
-    char *copy, *directory;
+    char directory_buffer[PATH_MAX];
+    const char *cursor = path, *directory;
     size_t count = 0;
-    if (!(copy = strdup (path)))
-        die ("strdup failed");
-    for (directory = strtok (copy, ":"); directory;
-         directory = strtok (NULL, ":")) {
+    while ((directory = next_path_directory (
+                &cursor, directory_buffer, sizeof directory_buffer))) {
         DIR *dir = opendir (directory);
         if (!dir)
             continue;
@@ -173,7 +187,6 @@ scan (void)
         closedir (dir);
     }
     scan_app_roots (&count);
-    free (copy);
     qsort (items, count, sizeof *items, qstrcmp);
     char temporary[] = CACHE ".XXXXXX";
     int fd = mkstemp (temporary);
@@ -185,15 +198,19 @@ scan (void)
         unlink (temporary);
         die ("open temporary cache failed");
     }
-    fprintf (cache, "%s\n", path);
+    int failed = fprintf (cache, "%s\n", path) < 0;
     for (size_t i = 0; i < count; i++) {
         if (i && !strcmp (items[i], items[i - 1]))
             continue;
-        fprintf (cache, "%s\n", items[i]);
-        printf ("%s\n", items[i]);
+        if (fprintf (cache, "%s\n", items[i]) < 0)
+            failed = 1;
     }
     if (fclose (cache) == EOF)
+        failed = 1;
+    if (failed) {
+        unlink (temporary);
         die ("write cache failed");
+    }
     if (rename (temporary, CACHE) < 0) {
         unlink (temporary);
         die ("replace cache failed");
@@ -202,6 +219,7 @@ scan (void)
         free (items[i]);
     free (items);
     items = NULL;
+    print_cache ();
 }
 
 int
@@ -211,6 +229,8 @@ main (void)
         die ("no $HOME");
     if (!(path = getenv ("PATH")))
         die ("no $PATH");
+    if (!getcwd (working_directory, sizeof working_directory))
+        die ("getcwd failed");
     if (chdir (home) < 0)
         die ("chdir failed");
     make_cache_dir ();
