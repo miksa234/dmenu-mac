@@ -56,6 +56,7 @@ typedef struct {
                           items:(NSArray<NSString *> *)items;
 - (BOOL)handleKeyEvent:(NSEvent *)event;
 - (void)selectRelative:(NSInteger)delta;
+- (void)ensureSelectionVisible;
 - (void)acceptInput:(BOOL)typed keepOpen:(BOOL)keepOpen;
 @end
 
@@ -342,8 +343,9 @@ static NSFont *menu_font(NSString *description) {
     o.lines = MIN(o.lines, available);
   }
   self.options = o;
+  BOOL inlineMode = (o.top || o.bottom) && !o.lines;
   NSInteger rows =
-      o.message ? 1
+      o.message || inlineMode ? 1
                 : 1 + (o.lines ? MIN(o.lines, (NSInteger)self.items.count) : 1);
   CGFloat width =
       o.top || o.bottom
@@ -395,10 +397,24 @@ static NSFont *menu_font(NSString *description) {
     promptWidth = MIN(promptWidth, MAX(0, inner.size.width - 60));
     CGFloat inputY = inner.origin.y + inner.size.height - o.height;
 
+    CGFloat inputAreaWidth = inlineMode
+                                 ? MIN(280, MAX(140, inner.size.width * 0.35))
+                                 : inner.size.width - promptWidth;
+    if (inlineMode)
+      inputAreaWidth = MIN(inputAreaWidth,
+                           MAX(0, inner.size.width - promptWidth));
+    CGFloat resultsX = inlineMode
+                          ? inner.origin.x + promptWidth + inputAreaWidth
+                          : inner.origin.x;
+    CGFloat resultsWidth = inlineMode
+                               ? MAX(0, NSMaxX(inner) - resultsX)
+                               : inner.size.width;
+    CGFloat resultsHeight = inlineMode
+                                ? inner.size.height
+                                : MAX(0, inner.size.height - o.height);
     self.results = [[ResultView alloc]
-        initWithFrame:NSMakeRect(inner.origin.x, inner.origin.y,
-                                 inner.size.width,
-                                 MAX(0, inner.size.height - o.height))];
+        initWithFrame:NSMakeRect(resultsX, inner.origin.y, resultsWidth,
+                                 resultsHeight)];
     self.results.menuController = self;
     [content addSubview:self.results];
 
@@ -420,8 +436,7 @@ static NSFont *menu_font(NSString *description) {
     self.input = [[NSTextField alloc]
         initWithFrame:NSMakeRect(inner.origin.x + promptWidth + inputPadding,
                                  inputY + inputVerticalPadding,
-                                 MAX(0, inner.size.width - promptWidth -
-                                         2 * inputPadding),
+                                 MAX(0, inputAreaWidth - 2 * inputPadding),
                                  MAX(0, o.height -
                                          2 * inputVerticalPadding))];
     self.input.bordered = NO;
@@ -518,9 +533,30 @@ static NSFont *menu_font(NSString *description) {
       self.firstVisible = self.selection;
     else if (self.selection >= self.firstVisible + self.options.lines)
       self.firstVisible = self.selection - self.options.lines + 1;
-  } else
-    self.firstVisible = self.selection;
+  } else {
+    [self ensureSelectionVisible];
+  }
   [self.results setNeedsDisplay:YES];
+}
+
+- (void)ensureSelectionVisible {
+  if (!self.matches.count || !self.results.bounds.size.width)
+    return;
+
+  NSDictionary *attributes = @{
+    NSFontAttributeName : menu_font(self.options.font)
+  };
+  CGFloat padding = 20;
+  while (self.firstVisible < self.selection) {
+    CGFloat width = 0;
+    for (NSInteger i = self.firstVisible; i <= self.selection; i++)
+      width += [self.matches[i] sizeWithAttributes:attributes].width + padding;
+    if (width <= self.results.bounds.size.width)
+      break;
+    self.firstVisible++;
+  }
+  if (self.selection < self.firstVisible)
+    self.firstVisible = self.selection;
 }
 
 - (void)acceptInput:(BOOL)typed keepOpen:(BOOL)keepOpen {
@@ -557,6 +593,12 @@ static NSFont *menu_font(NSString *description) {
     return YES;
   }
   switch (event.keyCode) {
+  case 123:
+    [self selectRelative:-1];
+    return YES;
+  case 124:
+    [self selectRelative:1];
+    return YES;
   case 125:
     [self selectRelative:1];
     return YES;
