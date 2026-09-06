@@ -1,5 +1,5 @@
-dmenu-mac
-dmenu-mac_path
-*.dSYM/
 .envrc
 .direnv
+build
+compile_commands.json
+

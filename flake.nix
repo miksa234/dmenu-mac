@@ -25,7 +25,7 @@
           pkgs = import nixpkgs { inherit system; };
         in {
           default = pkgs.mkShell {
-            nativeBuildInputs = [ pkgs.gnumake ];
+            nativeBuildInputs = with pkgs; [ gnumake bear ];
 
             shellHook = ''
               if ! xcode-select -p >/dev/null 2>&1; then
