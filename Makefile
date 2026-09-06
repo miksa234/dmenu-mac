@@ -1,8 +1,10 @@
 PREFIX ?= /usr/local
-CC = clang
+CC ?= clang
 CFLAGS ?= -O2 -Wall -Wextra
 
 BUILD = build
+BINDIR = $(DESTDIR)$(PREFIX)/bin
+MANDIR = $(DESTDIR)$(PREFIX)/share/man/man1
 
 all: $(BUILD)/dmenu-mac $(BUILD)/dmenu-mac_path
 
@@ -19,16 +21,16 @@ $(BUILD)/dmenu-mac_path: dmenu-mac_path.c
 	$(CC) $(CFLAGS) -std=c99 -D_DARWIN_C_SOURCE -o $@ $<
 
 install: all
-	install -d "$(DESTDIR)$(PREFIX)/bin"
-	install -m 755 $(BUILD)/dmenu-mac $(BUILD)/dmenu-mac_path dmenu-mac_run "$(DESTDIR)$(PREFIX)/bin"
-	install -d "$(DESTDIR)$(PREFIX)/share/man/man1"
-	install -m 644 dmenu-mac.1 "$(DESTDIR)$(PREFIX)/share/man/man1"
+	install -d "$(BINDIR)"
+	install -m 755 $(BUILD)/dmenu-mac $(BUILD)/dmenu-mac_path dmenu-mac_run "$(BINDIR)"
+	install -d "$(MANDIR)"
+	install -m 644 dmenu-mac.1 "$(MANDIR)"
 
 uninstall:
-	rm -f "$(DESTDIR)$(PREFIX)/bin/dmenu-mac" \
-		"$(DESTDIR)$(PREFIX)/bin/dmenu-mac_path" \
-		"$(DESTDIR)$(PREFIX)/bin/dmenu-mac_run" \
-		"$(DESTDIR)$(PREFIX)/share/man/man1/dmenu-mac.1"
+	rm -f "$(BINDIR)/dmenu-mac" \
+		"$(BINDIR)/dmenu-mac_path" \
+		"$(BINDIR)/dmenu-mac_run" \
+		"$(MANDIR)/dmenu-mac.1"
 
 clean:
 	rm -rf $(BUILD)
