@@ -32,13 +32,13 @@ See `dmenu-mac(1)` for options and keybindings.
 
 ## Nix-darwin
 
-Add `dmenu-mac` as a flake input and install it with Home Manager:
+Add as a flake input and install it with Home Manager:
 
 ```nix
 inputs.dmenu-mac.url = "github:miksa234/dmenu-mac";
 
 home.packages = [
-  inputs.dmenu-mac.packages.${pkgs.system}.default
+  inputs.dmenu-mac.packages.${stdenv.hostPlatform.system}.default
 ];
 ```
 

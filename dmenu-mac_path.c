@@ -82,8 +82,8 @@ uptodate (void)
     free (cached_path);
     if (!same_path)
         return 0;
-    while ((directory = next_path_directory (
-                &cursor, directory_buffer, sizeof directory_buffer))) {
+    while ((directory = next_path_directory (&cursor, directory_buffer,
+                                             sizeof directory_buffer))) {
         if (!stat (directory, &status) && status.st_mtime > modified)
             return 0;
     }
@@ -166,8 +166,8 @@ scan (void)
     char directory_buffer[PATH_MAX];
     const char *cursor = path, *directory;
     size_t count = 0;
-    while ((directory = next_path_directory (
-                &cursor, directory_buffer, sizeof directory_buffer))) {
+    while ((directory = next_path_directory (&cursor, directory_buffer,
+                                             sizeof directory_buffer))) {
         DIR *dir = opendir (directory);
         if (!dir)
             continue;
