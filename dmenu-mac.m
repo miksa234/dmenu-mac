@@ -402,18 +402,21 @@ static NSFont *menu_font(NSString *description) {
     self.results.menuController = self;
     [content addSubview:self.results];
 
+    CGFloat inputPadding = 6;
+    CGFloat inputVerticalPadding = 3;
     if (o.prompt.length) {
       NSTextField *prompt = [NSTextField labelWithString:o.prompt];
-      prompt.frame = NSMakeRect(inner.origin.x, inputY, promptWidth, o.height);
+      prompt.frame = NSMakeRect(inner.origin.x,
+                                inputY + inputVerticalPadding,
+                                promptWidth,
+                                o.height - 2 * inputVerticalPadding);
       prompt.font = font;
-      prompt.textColor = o.selected_fg;
-      prompt.backgroundColor = o.selected_bg;
+      prompt.textColor = o.normal_fg;
+      prompt.backgroundColor = o.normal_bg;
       prompt.drawsBackground = YES;
       prompt.alignment = NSTextAlignmentCenter;
       [content addSubview:prompt];
     }
-    CGFloat inputPadding = 6;
-    CGFloat inputVerticalPadding = 3;
     self.input = [[NSTextField alloc]
         initWithFrame:NSMakeRect(inner.origin.x + promptWidth + inputPadding,
                                  inputY + inputVerticalPadding,
