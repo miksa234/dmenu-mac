@@ -11,6 +11,15 @@
       ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
     in {
+      packages = forAllSystems (system:
+        let
+          pkgs = import nixpkgs { inherit system; };
+          dmenu-mac = pkgs.callPackage ./nix/package.nix { };
+        in {
+          inherit dmenu-mac;
+          default = dmenu-mac;
+        });
+
       devShells = forAllSystems (system:
         let
           pkgs = import nixpkgs { inherit system; };
