@@ -3,6 +3,7 @@
 
 #include <errno.h>
 #include <limits.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,6 +17,18 @@ enum dmenu_position {
 #include "config.h"
 
 #define VERSION "0.1.0"
+
+enum {
+    KEY_LEFT = 123,
+    KEY_RIGHT = 124,
+    KEY_DOWN = 125,
+    KEY_UP = 126,
+    KEY_PAGE_UP = 116,
+    KEY_PAGE_DOWN = 121,
+    KEY_RETURN = 36,
+    KEY_TAB = 48,
+    KEY_ESCAPE = 53,
+};
 
 typedef struct {
     BOOL insensitive;
@@ -65,6 +78,7 @@ typedef struct {
 - (void)selectRelative:(NSInteger)delta;
 - (void)ensureSelectionVisible;
 - (void)acceptInput:(BOOL)typed keepOpen:(BOOL)keepOpen;
+- (void)finish;
 @end
 
 static void
@@ -86,6 +100,20 @@ integer_option (const char *option, const char *value)
         exit (EXIT_FAILURE);
     }
     return (NSInteger)result;
+}
+
+static NSTimeInterval
+double_option (const char *option, const char *value)
+{
+    char *end;
+    errno = 0;
+    double result = strtod (value, &end);
+    if (errno || !*value || *end || result < 0 || !isfinite (result)) {
+        fprintf (stderr, "dmenu-mac: invalid value for %s: %s\n", option,
+                 value);
+        exit (EXIT_FAILURE);
+    }
+    return result;
 }
 
 static NSColor *
@@ -202,18 +230,24 @@ parse_options (int argc, char **argv)
         } else if (!strcmp (arg, "-mw") || !strcmp (arg, "--min-width")) {
             options.min_width
                 = integer_option (arg, next_argument (argc, argv, &i));
+            if (!options.min_width)
+                die ("minimum width must be greater than zero");
         } else if (!strcmp (arg, "-h") || !strcmp (arg, "--height")) {
             options.height
                 = integer_option (arg, next_argument (argc, argv, &i));
+            if (!options.height)
+                die ("height must be greater than zero");
         } else if (!strcmp (arg, "-bw") || !strcmp (arg, "--border-width")) {
             options.border_width
                 = integer_option (arg, next_argument (argc, argv, &i));
+            if (!options.border_width)
+                die ("border width must be greater than zero");
         } else if (!strcmp (arg, "-m") || !strcmp (arg, "--monitor")) {
             options.monitor
                 = integer_option (arg, next_argument (argc, argv, &i));
         } else if (!strcmp (arg, "-et") || !strcmp (arg, "--echo-timeout")) {
             options.timeout
-                = integer_option (arg, next_argument (argc, argv, &i));
+                = double_option (arg, next_argument (argc, argv, &i));
         } else if (!strcmp (arg, "-p") || !strcmp (arg, "--prompt")) {
             options.prompt = string_argument (argc, argv, &i);
         } else if (!strcmp (arg, "-po") || !strcmp (arg, "--prompt-only")) {
@@ -515,13 +549,17 @@ menu_font (NSString *description)
 - (void)applicationDidResignActive:(NSNotification *)notification
 {
     (void)notification;
-    [self.panel orderOut:nil];
-    [NSApp stop:nil];
+    [self finish];
 }
 
 - (void)finishMessage
 {
     self.status = EXIT_SUCCESS;
+    [self finish];
+}
+
+- (void)finish
+{
     [self.panel orderOut:nil];
     [NSApp stop:nil];
 }
@@ -638,10 +676,8 @@ menu_font (NSString *description)
     fputc ('\n', stdout);
     fflush (stdout);
     self.status = EXIT_SUCCESS;
-    if (!keepOpen) {
-        [self.panel orderOut:nil];
-        [NSApp stop:nil];
-    }
+    if (!keepOpen)
+        [self finish];
 }
 
 - (BOOL)handleKeyEvent:(NSEvent *)event
@@ -662,42 +698,40 @@ menu_font (NSString *description)
         return YES;
     }
     if (control && ([key isEqualToString:@"c"] || [key isEqualToString:@"g"])) {
-        [self.panel orderOut:nil];
-        [NSApp stop:nil];
+        [self finish];
         return YES;
     }
     switch (event.keyCode) {
-        case 123:
+        case KEY_LEFT:
             [self selectRelative:-1];
             return YES;
-        case 124:
+        case KEY_RIGHT:
             [self selectRelative:1];
             return YES;
-        case 125:
+        case KEY_DOWN:
             [self selectRelative:1];
             return YES;
-        case 126:
+        case KEY_UP:
             [self selectRelative:-1];
             return YES;
-        case 116:
+        case KEY_PAGE_UP:
             [self selectRelative:-MAX (self.options.lines, 1)];
             return YES;
-        case 121:
+        case KEY_PAGE_DOWN:
             [self selectRelative:MAX (self.options.lines, 1)];
             return YES;
-        case 36:
+        case KEY_RETURN:
             [self acceptInput:(flags & NSEventModifierFlagShift)
                      keepOpen:control];
             return YES;
-        case 48:
+        case KEY_TAB:
             if (self.selection >= 0) {
                 self.input.stringValue = self.matches[self.selection];
                 [self refreshMatches];
             }
             return YES;
-        case 53:
-            [self.panel orderOut:nil];
-            [NSApp stop:nil];
+        case KEY_ESCAPE:
+            [self finish];
             return YES;
         default:
             return NO;
