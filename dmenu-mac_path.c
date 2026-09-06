@@ -1,6 +1,7 @@
 /* See LICENSE for copyright and license details. */
 #include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <fts.h>
 #include <limits.h>
 #include <stdio.h>
@@ -28,8 +29,6 @@ make_cache_dir (void)
 {
     if (mkdir (".cache", 0700) < 0 && errno != EEXIST)
         die ("mkdir .cache failed");
-    if (mkdir (".cache/dmenu", 0700) < 0 && errno != EEXIST)
-        die ("mkdir .cache/dmenu failed");
 }
 
 static int
@@ -127,25 +126,6 @@ scan_app_roots (size_t *count)
 }
 
 static void
-scan_spotlight (size_t *count)
-{
-    FILE *results = popen ("/usr/bin/mdfind 'kMDItemContentType == "
-                           "\"com.apple.application-bundle\"'",
-                           "r");
-    if (!results)
-        return;
-    char buffer[PATH_MAX];
-    while (fgets (buffer, sizeof buffer, results)) {
-        buffer[strcspn (buffer, "\n")] = '\0';
-        struct stat status;
-        if (is_app (buffer) && !stat (buffer, &status)
-            && S_ISDIR (status.st_mode))
-            add_item (buffer, count);
-    }
-    pclose (results);
-}
-
-static void
 print_cache (void)
 {
     char buffer[BUFSIZ];
@@ -193,12 +173,18 @@ scan (void)
         closedir (dir);
     }
     scan_app_roots (&count);
-    scan_spotlight (&count);
     free (copy);
     qsort (items, count, sizeof *items, qstrcmp);
-    FILE *cache = fopen (CACHE, "w");
-    if (!cache)
-        die ("open cache failed");
+    char temporary[] = CACHE ".XXXXXX";
+    int fd = mkstemp (temporary);
+    if (fd < 0)
+        die ("create temporary cache failed");
+    FILE *cache = fdopen (fd, "w");
+    if (!cache) {
+        close (fd);
+        unlink (temporary);
+        die ("open temporary cache failed");
+    }
     fprintf (cache, "%s\n", path);
     for (size_t i = 0; i < count; i++) {
         if (i && !strcmp (items[i], items[i - 1]))
@@ -208,6 +194,10 @@ scan (void)
     }
     if (fclose (cache) == EOF)
         die ("write cache failed");
+    if (rename (temporary, CACHE) < 0) {
+        unlink (temporary);
+        die ("replace cache failed");
+    }
 }
 
 int
