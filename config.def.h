@@ -10,4 +10,3 @@ static CGFloat border_width = 3;
 static enum dmenu_position position = DMENU_POSITION_CENTER;
 static const char *font = "Default";
 static NSInteger lines = 0;
-static NSTimeInterval timeout = 3;

@@ -3,7 +3,6 @@
 
 #include <errno.h>
 #include <limits.h>
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -33,7 +32,6 @@ enum {
 typedef struct {
     BOOL insensitive;
     enum dmenu_position position;
-    BOOL message;
     BOOL prompt_only;
     BOOL return_early;
     NSInteger lines;
@@ -41,7 +39,6 @@ typedef struct {
     CGFloat min_width;
     CGFloat border_width;
     NSInteger monitor;
-    NSTimeInterval timeout;
     NSString *prompt;
     NSString *font;
     NSColor *normal_bg;
@@ -49,7 +46,6 @@ typedef struct {
     NSColor *selected_bg;
     NSColor *selected_fg;
     NSColor *border;
-    NSTextAlignment message_alignment;
 } Options;
 
 @class MenuController;
@@ -66,7 +62,6 @@ typedef struct {
 @property (nonatomic) Options options;
 @property (nonatomic, strong) NSArray<NSString *> *items;
 @property (nonatomic, strong) NSArray<NSString *> *matches;
-@property (nonatomic, strong) NSArray<NSNumber *> *matchWidths;
 @property (nonatomic, strong) NSFont *font;
 @property (nonatomic) NSInteger selection;
 @property (nonatomic) NSInteger firstVisible;
@@ -102,20 +97,6 @@ integer_option (const char *option, const char *value)
         exit (EXIT_FAILURE);
     }
     return (NSInteger)result;
-}
-
-static NSTimeInterval
-double_option (const char *option, const char *value)
-{
-    char *end;
-    errno = 0;
-    double result = strtod (value, &end);
-    if (errno || !*value || *end || result < 0 || !isfinite (result)) {
-        fprintf (stderr, "dmenu-mac: invalid value for %s: %s\n", option,
-                 value);
-        exit (EXIT_FAILURE);
-    }
-    return result;
 }
 
 static NSColor *
@@ -158,8 +139,6 @@ usage (void)
            "  -nf, --normal-foreground COLOR normal foreground\n"
            "  -sb, --selected-background C   selected background\n"
            "  -sf, --selected-foreground C   selected foreground\n"
-           "  -e, -ec, -er                   display stdin as a message\n"
-           "  -et, --echo-timeout SECS       message timeout\n"
            "  -v,  --version                 print version\n",
            stderr);
     exit (EXIT_FAILURE);
@@ -192,7 +171,6 @@ parse_options (int argc, char **argv)
         .min_width = min_width,
         .border_width = border_width,
         .monitor = 0,
-        .timeout = timeout,
         .position = position,
         .font = [NSString stringWithUTF8String:font],
         .normal_bg = color_option (color_bg),
@@ -200,7 +178,6 @@ parse_options (int argc, char **argv)
         .selected_bg = color_option (color_selected_bg),
         .selected_fg = color_option (color_selected_fg),
         .border = color_option (color_border),
-        .message_alignment = NSTextAlignmentLeft,
     };
 
     for (int i = 1; i < argc; i++) {
@@ -218,22 +195,12 @@ parse_options (int argc, char **argv)
             options.insensitive = YES;
         } else if (!strcmp (arg, "-r") || !strcmp (arg, "--return-early")) {
             options.return_early = YES;
-        } else if (!strcmp (arg, "-e") || !strcmp (arg, "--echo")) {
-            options.message = YES;
-        } else if (!strcmp (arg, "-ec") || !strcmp (arg, "--echo-centre")) {
-            options.message = YES;
-            options.message_alignment = NSTextAlignmentCenter;
-        } else if (!strcmp (arg, "-er") || !strcmp (arg, "--echo-right")) {
-            options.message = YES;
-            options.message_alignment = NSTextAlignmentRight;
         } else if (!strcmp (arg, "-l") || !strcmp (arg, "--lines")) {
             options.lines
                 = integer_option (arg, next_argument (argc, argv, &i));
         } else if (!strcmp (arg, "-mw") || !strcmp (arg, "--min-width")) {
             options.min_width
                 = integer_option (arg, next_argument (argc, argv, &i));
-            if (!options.min_width)
-                die ("minimum width must be greater than zero");
         } else if (!strcmp (arg, "-h") || !strcmp (arg, "--height")) {
             options.height
                 = integer_option (arg, next_argument (argc, argv, &i));
@@ -242,14 +209,9 @@ parse_options (int argc, char **argv)
         } else if (!strcmp (arg, "-bw") || !strcmp (arg, "--border-width")) {
             options.border_width
                 = integer_option (arg, next_argument (argc, argv, &i));
-            if (!options.border_width)
-                die ("border width must be greater than zero");
         } else if (!strcmp (arg, "-m") || !strcmp (arg, "--monitor")) {
             options.monitor
                 = integer_option (arg, next_argument (argc, argv, &i));
-        } else if (!strcmp (arg, "-et") || !strcmp (arg, "--echo-timeout")) {
-            options.timeout
-                = double_option (arg, next_argument (argc, argv, &i));
         } else if (!strcmp (arg, "-p") || !strcmp (arg, "--prompt")) {
             options.prompt = string_argument (argc, argv, &i);
         } else if (!strcmp (arg, "-po") || !strcmp (arg, "--prompt-only")) {
@@ -365,7 +327,8 @@ menu_font (NSString *description)
         CGFloat x = 0;
         for (NSInteger i = menu.firstVisible; i < (NSInteger)menu.matches.count;
              i++) {
-            CGFloat width = menu.matchWidths[i].doubleValue;
+            CGFloat width =
+                [menu.matches[i] sizeWithAttributes:normal].width + 2 * padding;
             if (x + width > self.bounds.size.width && x > 0)
                 break;
             NSRect item = NSMakeRect (x, 0, width, options.height);
@@ -389,12 +352,6 @@ menu_font (NSString *description)
         _font = menu_font (options.font);
         _items = items;
         _matches = items;
-        NSMutableArray<NSNumber *> *widths =
-            [NSMutableArray arrayWithCapacity:items.count];
-        NSDictionary *attributes = @{ NSFontAttributeName : _font };
-        for (NSString *item in items)
-            [widths addObject:@([item sizeWithAttributes:attributes].width + 20)];
-        _matchWidths = widths;
         _selection = items.count ? 0 : -1;
         _status = EXIT_FAILURE;
     }
@@ -438,10 +395,11 @@ menu_font (NSString *description)
     }
     self.options = o;
     BOOL inlineMode = (o.position != DMENU_POSITION_CENTER) && !o.lines;
-    NSInteger rows
-        = o.message || inlineMode
-              ? 1
-              : 1 + (o.lines ? MIN (o.lines, (NSInteger)self.items.count) : 1);
+    NSInteger rows = inlineMode
+                         ? 1
+                         : 1 + (o.lines ? MIN (o.lines,
+                                              (NSInteger)self.items.count)
+                                        : 1);
     CGFloat width = o.position != DMENU_POSITION_CENTER
                         ? visible.size.width
                         : MIN (visible.size.width,
@@ -477,79 +435,62 @@ menu_font (NSString *description)
     content.layer.borderColor = o.border.CGColor;
     content.layer.borderWidth = o.border_width;
     NSRect inner = NSInsetRect (content.bounds, o.border_width, o.border_width);
-    if (o.message) {
-        NSTextField *label =
-            [NSTextField labelWithString:self.items.firstObject ?: @""];
-        label.frame = inner;
-        label.font = font;
-        label.textColor = o.normal_fg;
-        label.backgroundColor = o.normal_bg;
-        label.drawsBackground = YES;
-        label.alignment = o.message_alignment;
-        [content addSubview:label];
-        [self performSelector:@selector (finishMessage)
-                   withObject:nil
-                   afterDelay:o.timeout];
-    } else {
-        promptWidth = MIN (promptWidth, MAX (0, inner.size.width - 60));
-        CGFloat inputY = inner.origin.y + inner.size.height - o.height;
+    promptWidth = MIN (promptWidth, MAX (0, inner.size.width - 60));
+    CGFloat inputY = inner.origin.y + inner.size.height - o.height;
 
-        CGFloat inputAreaWidth = inlineMode ? inner.size.width / 3
-                                            : inner.size.width - promptWidth;
-        if (inlineMode)
-            inputAreaWidth
-                = MIN (inputAreaWidth, MAX (0, inner.size.width - promptWidth));
-        CGFloat resultsX = inlineMode
-                               ? inner.origin.x + promptWidth + inputAreaWidth
-                               : inner.origin.x;
-        CGFloat resultsWidth = inlineMode ? MAX (0, NSMaxX (inner) - resultsX)
-                                          : inner.size.width;
-        CGFloat resultsHeight = inlineMode
-                                    ? inner.size.height
-                                    : MAX (0, inner.size.height - o.height);
-        self.results = [[ResultView alloc]
-            initWithFrame:NSMakeRect (resultsX, inner.origin.y, resultsWidth,
-                                      resultsHeight)];
-        self.results.menuController = self;
-        [content addSubview:self.results];
+    CGFloat inputAreaWidth = inlineMode ? inner.size.width / 3
+                                        : inner.size.width - promptWidth;
+    if (inlineMode)
+        inputAreaWidth
+            = MIN (inputAreaWidth, MAX (0, inner.size.width - promptWidth));
+    CGFloat resultsX = inlineMode
+                           ? inner.origin.x + promptWidth + inputAreaWidth
+                           : inner.origin.x;
+    CGFloat resultsWidth = inlineMode ? MAX (0, NSMaxX (inner) - resultsX)
+                                      : inner.size.width;
+    CGFloat resultsHeight = inlineMode
+                                ? inner.size.height
+                                : MAX (0, inner.size.height - o.height);
+    self.results = [[ResultView alloc]
+        initWithFrame:NSMakeRect (resultsX, inner.origin.y, resultsWidth,
+                                  resultsHeight)];
+    self.results.menuController = self;
+    [content addSubview:self.results];
 
-        CGFloat inputPadding = 6;
-        CGFloat inputVerticalPadding = 3;
-        if (o.prompt.length) {
-            NSTextField *prompt = [NSTextField labelWithString:o.prompt];
-            prompt.frame
-                = NSMakeRect (inner.origin.x, inputY + inputVerticalPadding,
-                              promptWidth, o.height - 2 * inputVerticalPadding);
-            prompt.font = font;
-            prompt.textColor = o.normal_fg;
-            prompt.backgroundColor = o.normal_bg;
-            prompt.drawsBackground = YES;
-            prompt.alignment = NSTextAlignmentCenter;
-            [content addSubview:prompt];
-        }
-        self.input = [[NSTextField alloc]
-            initWithFrame:NSMakeRect (
-                              inner.origin.x + promptWidth + inputPadding,
-                              inputY + inputVerticalPadding,
-                              MAX (0, inputAreaWidth - 2 * inputPadding),
-                              MAX (0, o.height - 2 * inputVerticalPadding))];
-        self.input.bordered = NO;
-        self.input.focusRingType = NSFocusRingTypeNone;
-        self.input.font = font;
-        self.input.textColor = o.normal_fg;
-        self.input.backgroundColor = o.normal_bg;
-        self.input.delegate = self;
-        [content addSubview:self.input];
+    CGFloat inputPadding = 6;
+    CGFloat inputVerticalPadding = 3;
+    if (o.prompt.length) {
+        NSTextField *prompt = [NSTextField labelWithString:o.prompt];
+        prompt.frame
+            = NSMakeRect (inner.origin.x, inputY + inputVerticalPadding,
+                          promptWidth, o.height - 2 * inputVerticalPadding);
+        prompt.font = font;
+        prompt.textColor = o.normal_fg;
+        prompt.backgroundColor = o.normal_bg;
+        prompt.drawsBackground = YES;
+        prompt.alignment = NSTextAlignmentCenter;
+        [content addSubview:prompt];
     }
+    self.input = [[NSTextField alloc]
+        initWithFrame:NSMakeRect (
+                          inner.origin.x + promptWidth + inputPadding,
+                          inputY + inputVerticalPadding,
+                          MAX (0, inputAreaWidth - 2 * inputPadding),
+                          MAX (0, o.height - 2 * inputVerticalPadding))];
+    self.input.bordered = NO;
+    self.input.focusRingType = NSFocusRingTypeNone;
+    self.input.font = font;
+    self.input.textColor = o.normal_fg;
+    self.input.backgroundColor = o.normal_bg;
+    self.input.delegate = self;
+    [content addSubview:self.input];
 
     [NSApp activateIgnoringOtherApps:YES];
     [self.panel makeKeyAndOrderFront:nil];
-    if (self.input) {
-        [self.panel makeFirstResponder:self.input];
-        NSTextView *editor = (NSTextView *)[self.panel fieldEditor:YES
-                                                         forObject:self.input];
-        editor.insertionPointColor = o.normal_fg;
-    }
+    [self.panel makeFirstResponder:self.input];
+    NSTextView *editor = (NSTextView *)[self.panel fieldEditor:YES
+                                                     forObject:self.input];
+    editor.insertionPointColor = o.normal_fg;
     if (o.return_early && self.matches.count == 1)
         [self acceptInput:NO keepOpen:NO];
 }
@@ -557,12 +498,6 @@ menu_font (NSString *description)
 - (void)applicationDidResignActive:(NSNotification *)notification
 {
     (void)notification;
-    [self finish];
-}
-
-- (void)finishMessage
-{
-    self.status = EXIT_SUCCESS;
     [self finish];
 }
 
@@ -613,11 +548,6 @@ menu_font (NSString *description)
     [exact addObjectsFromArray:prefix];
     [exact addObjectsFromArray:substring];
     self.matches = exact;
-    NSMutableArray<NSNumber *> *widths = [NSMutableArray arrayWithCapacity:exact.count];
-    NSDictionary *attributes = @{ NSFontAttributeName : self.font };
-    for (NSString *item in exact)
-        [widths addObject:@([item sizeWithAttributes:attributes].width + 20)];
-    self.matchWidths = widths;
     self.selection = exact.count ? 0 : -1;
     self.firstVisible = 0;
     [self.results setNeedsDisplay:YES];
@@ -653,11 +583,13 @@ menu_font (NSString *description)
     if (!self.matches.count || !self.results.bounds.size.width)
         return;
 
+    NSDictionary *attributes = @{ NSFontAttributeName : self.font };
     if (self.selection >= self.firstVisible) {
         while (self.firstVisible < self.selection) {
             CGFloat width = 0;
             for (NSInteger i = self.firstVisible; i <= self.selection; i++)
-                width += self.matchWidths[i].doubleValue;
+                width += [self.matches[i] sizeWithAttributes:attributes].width
+                         + 20;
             if (width <= self.results.bounds.size.width)
                 break;
             self.firstVisible++;
@@ -667,7 +599,8 @@ menu_font (NSString *description)
         while (self.firstVisible > 0) {
             CGFloat width = 0;
             for (NSInteger i = self.firstVisible - 1; i <= self.selection; i++)
-                width += self.matchWidths[i].doubleValue;
+                width += [self.matches[i] sizeWithAttributes:attributes].width
+                         + 20;
             if (width > self.results.bounds.size.width)
                 break;
             self.firstVisible--;
