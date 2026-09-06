@@ -121,25 +121,25 @@ static void
 usage (void)
 {
     fputs ("usage: dmenu-mac [options]\n"
-           "  -c,  --center                  show a centered menu\n"
-           "  -b,  --bottom                  show a full-width bottom bar\n"
-           "  -t,  --top                     show a full-width top bar\n"
-           "  -i,  --insensitive             case-insensitive matching\n"
-           "  -l,  --lines N                 number of visible result rows\n"
-           "  -mw, --min-width N             minimum centered width (600)\n"
-           "  -h,  --height N                row height (20)\n"
-           "  -bw, --border-width N          border width (3)\n"
-           "  -bc, --border-color COLOR      border color\n"
-           "  -m,  --monitor N               screen index\n"
-           "  -p,  --prompt TEXT             input prompt\n"
-           "  -po, --prompt-only TEXT        prompt without reading stdin\n"
-           "  -r,  --return-early            accept a sole match\n"
-           "  -fn, --font-name FONT          font name\n"
-           "  -nb, --normal-background COLOR normal background\n"
-           "  -nf, --normal-foreground COLOR normal foreground\n"
-           "  -sb, --selected-background C   selected background\n"
-           "  -sf, --selected-foreground C   selected foreground\n"
-           "  -v,  --version                 print version\n",
+           "  -c             show a centered menu\n"
+           "  -b             show a full-width bottom bar\n"
+           "  -t             show a full-width top bar\n"
+           "  -i             case-insensitive matching\n"
+           "  -l N           number of visible result rows\n"
+           "  -mw N          minimum centered width (600)\n"
+           "  -h N           row height (20)\n"
+           "  -bw N          border width (3)\n"
+           "  -bc COLOR      border color\n"
+           "  -m N           screen index\n"
+           "  -p TEXT        input prompt\n"
+           "  -po TEXT       prompt without reading stdin\n"
+           "  -r             accept a sole match\n"
+           "  -fn FONT       font name\n"
+           "  -nb COLOR      normal background\n"
+           "  -nf COLOR      normal foreground\n"
+           "  -sb COLOR      selected background\n"
+           "  -sf COLOR      selected foreground\n"
+           "  -v             print version\n",
            stderr);
     exit (EXIT_FAILURE);
 }
@@ -182,56 +182,52 @@ parse_options (int argc, char **argv)
 
     for (int i = 1; i < argc; i++) {
         const char *arg = argv[i];
-        if (!strcmp (arg, "-v") || !strcmp (arg, "--version")) {
+        if (!strcmp (arg, "-v")) {
             printf ("dmenu-mac-%s\n", VERSION);
             exit (EXIT_SUCCESS);
-        } else if (!strcmp (arg, "-b") || !strcmp (arg, "--bottom")) {
+        } else if (!strcmp (arg, "-b")) {
             options.position = DMENU_POSITION_BOTTOM;
-        } else if (!strcmp (arg, "-t") || !strcmp (arg, "--top")) {
+        } else if (!strcmp (arg, "-t")) {
             options.position = DMENU_POSITION_TOP;
-        } else if (!strcmp (arg, "-c") || !strcmp (arg, "--center")) {
+        } else if (!strcmp (arg, "-c")) {
             options.position = DMENU_POSITION_CENTER;
-        } else if (!strcmp (arg, "-i") || !strcmp (arg, "--insensitive")) {
+        } else if (!strcmp (arg, "-i")) {
             options.insensitive = YES;
-        } else if (!strcmp (arg, "-r") || !strcmp (arg, "--return-early")) {
+        } else if (!strcmp (arg, "-r")) {
             options.return_early = YES;
-        } else if (!strcmp (arg, "-l") || !strcmp (arg, "--lines")) {
+        } else if (!strcmp (arg, "-l")) {
             options.lines
                 = integer_option (arg, next_argument (argc, argv, &i));
-        } else if (!strcmp (arg, "-mw") || !strcmp (arg, "--min-width")) {
+        } else if (!strcmp (arg, "-mw")) {
             options.min_width
                 = integer_option (arg, next_argument (argc, argv, &i));
-        } else if (!strcmp (arg, "-h") || !strcmp (arg, "--height")) {
+        } else if (!strcmp (arg, "-h")) {
             options.height
                 = integer_option (arg, next_argument (argc, argv, &i));
             if (!options.height)
                 die ("height must be greater than zero");
-        } else if (!strcmp (arg, "-bw") || !strcmp (arg, "--border-width")) {
+        } else if (!strcmp (arg, "-bw")) {
             options.border_width
                 = integer_option (arg, next_argument (argc, argv, &i));
-        } else if (!strcmp (arg, "-m") || !strcmp (arg, "--monitor")) {
+        } else if (!strcmp (arg, "-m")) {
             options.monitor
                 = integer_option (arg, next_argument (argc, argv, &i));
-        } else if (!strcmp (arg, "-p") || !strcmp (arg, "--prompt")) {
+        } else if (!strcmp (arg, "-p")) {
             options.prompt = string_argument (argc, argv, &i);
-        } else if (!strcmp (arg, "-po") || !strcmp (arg, "--prompt-only")) {
+        } else if (!strcmp (arg, "-po")) {
             options.prompt = string_argument (argc, argv, &i);
             options.prompt_only = YES;
-        } else if (!strcmp (arg, "-fn") || !strcmp (arg, "--font-name")) {
+        } else if (!strcmp (arg, "-fn")) {
             options.font = string_argument (argc, argv, &i);
-        } else if (!strcmp (arg, "-nb")
-                   || !strcmp (arg, "--normal-background")) {
+        } else if (!strcmp (arg, "-nb")) {
             options.normal_bg = color_option (next_argument (argc, argv, &i));
-        } else if (!strcmp (arg, "-nf")
-                   || !strcmp (arg, "--normal-foreground")) {
+        } else if (!strcmp (arg, "-nf")) {
             options.normal_fg = color_option (next_argument (argc, argv, &i));
-        } else if (!strcmp (arg, "-sb")
-                   || !strcmp (arg, "--selected-background")) {
+        } else if (!strcmp (arg, "-sb")) {
             options.selected_bg = color_option (next_argument (argc, argv, &i));
-        } else if (!strcmp (arg, "-sf")
-                   || !strcmp (arg, "--selected-foreground")) {
+        } else if (!strcmp (arg, "-sf")) {
             options.selected_fg = color_option (next_argument (argc, argv, &i));
-        } else if (!strcmp (arg, "-bc") || !strcmp (arg, "--border-color")) {
+        } else if (!strcmp (arg, "-bc")) {
             options.border = color_option (next_argument (argc, argv, &i));
         } else {
             usage ();
@@ -395,11 +391,10 @@ menu_font (NSString *description)
     }
     self.options = o;
     BOOL inlineMode = (o.position != DMENU_POSITION_CENTER) && !o.lines;
-    NSInteger rows = inlineMode
-                         ? 1
-                         : 1 + (o.lines ? MIN (o.lines,
-                                              (NSInteger)self.items.count)
-                                        : 1);
+    NSInteger rows
+        = inlineMode
+              ? 1
+              : 1 + (o.lines ? MIN (o.lines, (NSInteger)self.items.count) : 1);
     CGFloat width = o.position != DMENU_POSITION_CENTER
                         ? visible.size.width
                         : MIN (visible.size.width,
@@ -438,19 +433,18 @@ menu_font (NSString *description)
     promptWidth = MIN (promptWidth, MAX (0, inner.size.width - 60));
     CGFloat inputY = inner.origin.y + inner.size.height - o.height;
 
-    CGFloat inputAreaWidth = inlineMode ? inner.size.width / 3
-                                        : inner.size.width - promptWidth;
+    CGFloat inputAreaWidth
+        = inlineMode ? inner.size.width / 3 : inner.size.width - promptWidth;
     if (inlineMode)
         inputAreaWidth
             = MIN (inputAreaWidth, MAX (0, inner.size.width - promptWidth));
     CGFloat resultsX = inlineMode
                            ? inner.origin.x + promptWidth + inputAreaWidth
                            : inner.origin.x;
-    CGFloat resultsWidth = inlineMode ? MAX (0, NSMaxX (inner) - resultsX)
-                                      : inner.size.width;
-    CGFloat resultsHeight = inlineMode
-                                ? inner.size.height
-                                : MAX (0, inner.size.height - o.height);
+    CGFloat resultsWidth
+        = inlineMode ? MAX (0, NSMaxX (inner) - resultsX) : inner.size.width;
+    CGFloat resultsHeight = inlineMode ? inner.size.height
+                                       : MAX (0, inner.size.height - o.height);
     self.results = [[ResultView alloc]
         initWithFrame:NSMakeRect (resultsX, inner.origin.y, resultsWidth,
                                   resultsHeight)];
@@ -588,8 +582,8 @@ menu_font (NSString *description)
         while (self.firstVisible < self.selection) {
             CGFloat width = 0;
             for (NSInteger i = self.firstVisible; i <= self.selection; i++)
-                width += [self.matches[i] sizeWithAttributes:attributes].width
-                         + 20;
+                width +=
+                    [self.matches[i] sizeWithAttributes:attributes].width + 20;
             if (width <= self.results.bounds.size.width)
                 break;
             self.firstVisible++;
@@ -599,8 +593,8 @@ menu_font (NSString *description)
         while (self.firstVisible > 0) {
             CGFloat width = 0;
             for (NSInteger i = self.firstVisible - 1; i <= self.selection; i++)
-                width += [self.matches[i] sizeWithAttributes:attributes].width
-                         + 20;
+                width +=
+                    [self.matches[i] sizeWithAttributes:attributes].width + 20;
             if (width > self.results.bounds.size.width)
                 break;
             self.firstVisible--;
