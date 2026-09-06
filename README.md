@@ -1,6 +1,6 @@
 # dmenu-mac
 
-dmenu-mac is a dmenu for macOS.
+dmenu-mac is a dmenu port for macOS.
 
 ## Requirements
 
@@ -45,5 +45,5 @@ home.packages = [
 Or install the package directly:
 
 ```sh
-nix profile install github:miksa234/dmenu-mac
+nix shell github:miksa234/dmenu-mac
 ```

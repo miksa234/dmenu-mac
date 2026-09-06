@@ -1,6 +1,5 @@
 {
   stdenv,
-  makeWrapper,
   ...
 }:
 
@@ -10,14 +9,8 @@ stdenv.mkDerivation {
 
   src = ../.;
 
-  nativeBuildInputs = [ makeWrapper ];
-
   installPhase = ''
     mkdir -p $out/bin
-    install -m755 dmenu-mac $out/bin/dmenu-mac
-    install -m755 dmenu-mac_path $out/bin/dmenu-mac_path
-    install -m755 dmenu-mac_run $out/bin/dmenu-mac_run-unwrapped
-    makeWrapper $out/bin/dmenu-mac_run-unwrapped $out/bin/dmenu-mac_run \
-      --prefix PATH : $out/bin
+    install -m755 build/dmenu-mac build/dmenu-mac_path dmenu-mac_run "$out/bin"
   '';
 }

@@ -1,6 +1,8 @@
 #!/bin/sh
 
-choice=$(dmenu-mac_path | dmenu-mac -i "$@")
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+choice=$("$script_dir/dmenu-mac_path" | "$script_dir/dmenu-mac" -i "$@")
 status=$?
 
 [ "$status" -eq 0 ] || exit "$status"

@@ -7,12 +7,19 @@
 #include <stdlib.h>
 #include <string.h>
 
+enum dmenu_position {
+  DMENU_POSITION_CENTER,
+  DMENU_POSITION_TOP,
+  DMENU_POSITION_BOTTOM
+};
+
+#include "config.h"
+
 #define VERSION "0.1.0"
 
 typedef struct {
   BOOL insensitive;
-  BOOL top;
-  BOOL bottom;
+  enum dmenu_position position;
   BOOL message;
   BOOL prompt_only;
   BOOL return_early;
@@ -93,6 +100,7 @@ static NSColor *color_option(const char *value) {
 
 static void usage(void) {
   fputs("usage: dmenu-mac [options]\n"
+        "  -c,  --center                  show a centered menu\n"
         "  -b,  --bottom                  show a full-width bottom bar\n"
         "  -t,  --top                     show a full-width top bar\n"
         "  -i,  --insensitive             case-insensitive matching\n"
@@ -133,18 +141,19 @@ static NSString *string_argument(int argc, char **argv, int *index) {
 
 static Options parse_options(int argc, char **argv) {
   Options options = {
-      .lines = 20,
-      .height = 20,
-      .min_width = 600,
-      .border_width = 3,
+      .lines = lines,
+      .height = panel_height,
+      .min_width = min_width,
+      .border_width = border_width,
       .monitor = 0,
-      .timeout = 3,
-      .font = @"Terminus (TTF) 15",
-      .normal_bg = color_option("#000000ff"),
-      .normal_fg = color_option("#ffffffff"),
-      .selected_bg = color_option("#ffc87fff"),
-      .selected_fg = color_option("#000000ff"),
-      .border = color_option("#ffc87fff"),
+      .timeout = timeout,
+      .position = position,
+      .font = [NSString stringWithUTF8String:font],
+      .normal_bg = color_option(color_bg),
+      .normal_fg = color_option(color_fg),
+      .selected_bg = color_option(color_selected_bg),
+      .selected_fg = color_option(color_selected_fg),
+      .border = color_option(color_border),
       .message_alignment = NSTextAlignmentLeft,
   };
 
@@ -154,9 +163,11 @@ static Options parse_options(int argc, char **argv) {
       printf("dmenu-mac-%s\n", VERSION);
       exit(EXIT_SUCCESS);
     } else if (!strcmp(arg, "-b") || !strcmp(arg, "--bottom")) {
-      options.bottom = YES;
+      options.position = DMENU_POSITION_BOTTOM;
     } else if (!strcmp(arg, "-t") || !strcmp(arg, "--top")) {
-      options.top = YES;
+      options.position = DMENU_POSITION_TOP;
+    } else if (!strcmp(arg, "-c") || !strcmp(arg, "--center")) {
+      options.position = DMENU_POSITION_CENTER;
     } else if (!strcmp(arg, "-i") || !strcmp(arg, "--insensitive")) {
       options.insensitive = YES;
     } else if (!strcmp(arg, "-r") || !strcmp(arg, "--return-early")) {
@@ -343,12 +354,12 @@ static NSFont *menu_font(NSString *description) {
     o.lines = MIN(o.lines, available);
   }
   self.options = o;
-  BOOL inlineMode = (o.top || o.bottom) && !o.lines;
+  BOOL inlineMode = (o.position != DMENU_POSITION_CENTER) && !o.lines;
   NSInteger rows =
       o.message || inlineMode ? 1
                 : 1 + (o.lines ? MIN(o.lines, (NSInteger)self.items.count) : 1);
   CGFloat width =
-      o.top || o.bottom
+      o.position != DMENU_POSITION_CENTER
           ? visible.size.width
           : MIN(visible.size.width,
                 MAX(o.min_width, promptWidth + widest + 2 * o.border_width));
@@ -356,9 +367,9 @@ static NSFont *menu_font(NSString *description) {
       MIN(visible.size.height, rows * o.height + 2 * o.border_width);
   NSRect frame = NSMakeRect(NSMidX(visible) - width / 2,
                             NSMidY(visible) - height / 2, width, height);
-  if (o.top)
+  if (o.position == DMENU_POSITION_TOP)
     frame.origin = NSMakePoint(visible.origin.x, NSMaxY(visible) - height);
-  else if (o.bottom)
+  else if (o.position == DMENU_POSITION_BOTTOM)
     frame.origin = visible.origin;
 
   self.panel =
@@ -398,7 +409,7 @@ static NSFont *menu_font(NSString *description) {
     CGFloat inputY = inner.origin.y + inner.size.height - o.height;
 
     CGFloat inputAreaWidth = inlineMode
-                                 ? MIN(280, MAX(140, inner.size.width * 0.35))
+                                 ? inner.size.width / 3
                                  : inner.size.width - promptWidth;
     if (inlineMode)
       inputAreaWidth = MIN(inputAreaWidth,
@@ -547,16 +558,26 @@ static NSFont *menu_font(NSString *description) {
     NSFontAttributeName : menu_font(self.options.font)
   };
   CGFloat padding = 20;
-  while (self.firstVisible < self.selection) {
-    CGFloat width = 0;
-    for (NSInteger i = self.firstVisible; i <= self.selection; i++)
-      width += [self.matches[i] sizeWithAttributes:attributes].width + padding;
-    if (width <= self.results.bounds.size.width)
-      break;
-    self.firstVisible++;
-  }
-  if (self.selection < self.firstVisible)
+  if (self.selection >= self.firstVisible) {
+    while (self.firstVisible < self.selection) {
+      CGFloat width = 0;
+      for (NSInteger i = self.firstVisible; i <= self.selection; i++)
+        width += [self.matches[i] sizeWithAttributes:attributes].width + padding;
+      if (width <= self.results.bounds.size.width)
+        break;
+      self.firstVisible++;
+    }
+  } else {
     self.firstVisible = self.selection;
+    while (self.firstVisible > 0) {
+      CGFloat width = 0;
+      for (NSInteger i = self.firstVisible - 1; i <= self.selection; i++)
+        width += [self.matches[i] sizeWithAttributes:attributes].width + padding;
+      if (width > self.results.bounds.size.width)
+        break;
+      self.firstVisible--;
+    }
+  }
 }
 
 - (void)acceptInput:(BOOL)typed keepOpen:(BOOL)keepOpen {
