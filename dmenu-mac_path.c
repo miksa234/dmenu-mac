@@ -8,15 +8,21 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <time.h>
 #include <unistd.h>
 
 #define CACHE ".cache/dmenu_mac_cache"
-#define CACHE_TTL 30
 
 static char **items;
 static const char *home, *path;
-static char working_directory[PATH_MAX];
+static char working_directory[PATH_MAX], user_apps[PATH_MAX];
+static const char *app_roots[] = {
+    "/Applications",
+    "/System/Applications",
+    "/System/Library/CoreServices",
+    "/Network/Applications",
+    user_apps,
+    NULL,
+};
 
 static void
 die (const char *message)
@@ -64,8 +70,6 @@ uptodate (void)
     struct stat status;
     if (stat (CACHE, &status) < 0)
         return 0;
-    if (time (NULL) - status.st_mtime >= CACHE_TTL)
-        return 0;
     time_t modified = status.st_mtime;
     FILE *cache = fopen (CACHE, "r");
     char *cached_path = NULL;
@@ -87,6 +91,9 @@ uptodate (void)
         if (!stat (directory, &status) && status.st_mtime > modified)
             return 0;
     }
+    for (size_t i = 0; app_roots[i]; i++)
+        if (!stat (app_roots[i], &status) && status.st_mtime > modified)
+            return 0;
     return 1;
 }
 
@@ -111,31 +118,23 @@ is_app (const char *path)
 static void
 scan_app_roots (size_t *count)
 {
-    char user_apps[PATH_MAX];
-    const char *roots[] = {
-        "/Applications",
-        "/System/Applications",
-        "/System/Library/CoreServices",
-        "/Network/Applications",
-        user_apps,
-        NULL,
-    };
-    if (snprintf (user_apps, sizeof user_apps, "%s/Applications", home)
-        >= (int)sizeof user_apps)
-        return;
-
     FTS *tree
-        = fts_open ((char *const *)roots, FTS_PHYSICAL | FTS_NOCHDIR, NULL);
+        = fts_open ((char *const *)app_roots, FTS_PHYSICAL | FTS_NOCHDIR, NULL);
     if (!tree)
         return;
     FTSENT *entry;
     while ((entry = fts_read (tree))) {
-        if (entry->fts_info != FTS_D)
+        struct stat status;
+        int directory = entry->fts_info == FTS_D;
+        if (!directory
+            && (entry->fts_info != FTS_SL || stat (entry->fts_path, &status) < 0
+                || !S_ISDIR (status.st_mode)))
             continue;
         if (!is_app (entry->fts_path))
             continue;
         add_item (entry->fts_path, count);
-        fts_set (tree, entry, FTS_SKIP);
+        if (directory)
+            fts_set (tree, entry, FTS_SKIP);
     }
     fts_close (tree);
 }
@@ -231,6 +230,9 @@ main (void)
         die ("no $PATH");
     if (!getcwd (working_directory, sizeof working_directory))
         die ("getcwd failed");
+    if (snprintf (user_apps, sizeof user_apps, "%s/Applications", home)
+        >= (int)sizeof user_apps)
+        die ("$HOME too long");
     if (chdir (home) < 0)
         die ("chdir failed");
     make_cache_dir ();
